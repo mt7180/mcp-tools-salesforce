@@ -1,6 +1,8 @@
 from typing import DefaultDict
-from fastmcp import FastMCP
+from fastmcp import FastMCP, Context
+from fastmcp.client.sampling.handlers.openai import OpenAISamplingHandler
 from simple_salesforce import Salesforce
+from dataclasses import dataclass
 
 import jwt
 
@@ -10,12 +12,14 @@ import requests
 from dotenv import load_dotenv
 
 
-
-mcp = FastMCP("Custom Salesforce MCP Server")
-
 dotenv_loaded = load_dotenv()
+
 CLIENT_ID = os.getenv('CLIENT_ID')
 USERNAME = os.getenv('USERNAME')
+
+mcp = FastMCP("Custom Salesforce MCP Server",
+    sampling_handler=OpenAISamplingHandler(default_model="gpt-4o-mini"),
+    sampling_handler_behavior="always")
 
 if dotenv_loaded:
     with open(os.getenv('PRIVATE_KEY_FILE'), 'r') as f:
@@ -66,7 +70,7 @@ def _get_jwt_token(
 
     return response_json
 
-def get_field_definitions(object_description: dict) -> dict:
+def extract_relevant_fields(object_description: dict) -> dict:
     if not object_description:
         return {}
     
@@ -78,42 +82,126 @@ def get_field_definitions(object_description: dict) -> dict:
 
 
 @mcp.tool()
-def get_salesforce_basic_datamodel() -> dict:
+async def get_basic_datamodel() -> dict:
     """returns the basic data model of my scratch org as dictionary 
-    of the most relevant sObject Types with their fields
+    of the most relevant sObject Types (like Account, Contact, Case and User) with their fields
     """
 
-    oAuth_info = _get_jwt_token()
+    oauth_info = _get_jwt_token()
     sf = Salesforce(
-        instance_url = oAuth_info['instance_url'], 
-        session_id = oAuth_info['access_token']
+        instance_url = oauth_info['instance_url'], 
+        session_id = oauth_info['access_token']
     )
 
     basic_sobject_types = [
-        'Account', 'Asset', 'Contact', 'Contract', 'Lead', 'Opportunity', 'Order' 'Case', 
-        'Task', 'User', 'Product2'
+        'Account', 'Contact', 'Case', 'User'
     ]
 
-    # data_model = DefaultDict(dict)
     data_model = {}
 
     for sobject in basic_sobject_types:
         object_description = sf.__getattr__(sobject).describe()
         if object_description['createable']:
-            data_model[sobject] = get_field_definitions(object_description)
+            data_model[sobject] = extract_relevant_fields(object_description)
     return data_model
 
     
 @mcp.tool()
-def get_sobject_fields(sobject_name: str) -> dict:
-    """returns the fields of a specific sObject in the scratch org"""
-    oAuth_info = _get_jwt_token()
+async def describe_sobject(sobject_name: str) -> dict:
+    """returns the fields of a specific sObject in the salesforce scratch org"""
+
+    oauth_info = _get_jwt_token()
     sf = Salesforce(
-        instance_url = oAuth_info['instance_url'], 
-        session_id = oAuth_info['access_token']
+        instance_url = oauth_info['instance_url'], 
+        session_id = oauth_info['access_token']
     )
+
     object_description = sf.__getattr__(sobject_name).describe()
+
     if not object_description['createable']:
         return {}
-    return get_field_definitions(object_description)
+    return extract_relevant_fields(object_description)
 
+@dataclass
+class ResultType:
+    record: dict
+    
+@mcp.tool()
+async def generate_nested_record(request: str, ctx: Context) -> dict:
+    """generates a Salesforce nested record according to the request"""
+    
+    prompt = f"""Generate a nested record as a JSON object, which is compatible 
+        with Salesforce Composite Tree API and conforms to the provided request: 
+        {request}
+
+        Example nested record: 
+        {example_nested_record()}
+    """
+
+    record = await ctx.sample(
+        prompt,
+        result_type=ResultType,  
+        tools=[describe_sobject, example_nested_record],
+        temperature=0.7,
+        max_tokens=300
+    )
+    # await ctx.info(f"generated record: {record.text}")
+
+    return record.result
+
+@mcp.tool()
+async def insert_record(root_sobject: str, record: dict) -> dict:
+    """inserts a record or nested records into the salesforce scratch org according to the provided record.
+    """
+    endpoint = f"composite/tree/{root_sobject}/"
+    
+    oauth_info = _get_jwt_token()
+    sf = Salesforce(
+        instance_url = oauth_info['instance_url'], 
+        session_id = oauth_info['access_token']
+    )
+   
+    response = sf.restful(
+        endpoint,
+        method='POST',
+        json=record
+    )
+    return response
+
+@mcp.tool()
+def example_nested_record() -> str:
+    """example of a nested record structure that is compatible with the Salesforce Composite Tree API """
+    return {
+        "records" :[{
+            "attributes" : {"type" : "Account", "referenceId" : "ref1"},
+            "name" : "SampleAccount",
+            "phone" : "1234567890",
+            "website" : "www.salesforce.com",
+            "numberOfEmployees" : "100",
+            "industry" : "Banking",
+            "Contacts" : {
+            "records" : [{
+                "attributes" : {"type" : "Contact", "referenceId" : "ref2"},
+                "lastname" : "Smith",
+                "title" : "President",
+                "email" : "sample@salesforce.com"
+                },{         
+                "attributes" : {"type" : "Contact", "referenceId" : "ref3"},
+                "lastname" : "Evans",
+                "title" : "Vice President",
+                "email" : "sample@salesforce.com"
+                }]
+            }
+            },{
+            "attributes" : {"type" : "Account", "referenceId" : "ref4"},
+            "name" : "SampleAccount2",
+            "phone" : "1234567890",
+            "website" : "www.salesforce2.com",
+            "numberOfEmployees" : "100",
+            "industry" : "Banking"
+            }]
+        }
+
+if __name__ == "__main__":
+    mcp.run(transport="http", host="127.0.0.1", port=8000)
+    
