@@ -1,4 +1,4 @@
-from typing import DefaultDict
+from typing import Any, DefaultDict
 from fastmcp import FastMCP, Context
 from fastmcp.client.sampling.handlers.openai import OpenAISamplingHandler
 from simple_salesforce import Salesforce
@@ -32,12 +32,12 @@ assert PRIVATE_KEY is not None, "Private key must be provided either in .env fil
 class TokenError(Exception):
     pass
 
-def _get_jwt_token(
+def get_sf_client(
         client_id=CLIENT_ID, 
         username=USERNAME, 
         private_key=PRIVATE_KEY, 
         domain='login'
-    ) -> str:
+    ) -> Salesforce:
 
     url = f'https://{domain}.salesforce.com/services/oauth2/token'
 
@@ -67,8 +67,13 @@ def _get_jwt_token(
 
     if not 'access_token' in response_json:
         raise TokenError(f"No access_token in response: {response_json}")
+    
+    sf = Salesforce(
+        instance_url = response_json['instance_url'], 
+        session_id = response_json['access_token']
+    )
 
-    return response_json
+    return sf
 
 def extract_relevant_fields(object_description: dict) -> dict:
     if not object_description:
@@ -87,11 +92,7 @@ async def get_basic_datamodel() -> dict:
     of the most relevant sObject Types (like Account, Contact, Case and User) with their fields
     """
 
-    oauth_info = _get_jwt_token()
-    sf = Salesforce(
-        instance_url = oauth_info['instance_url'], 
-        session_id = oauth_info['access_token']
-    )
+    sf = get_sf_client()
 
     basic_sobject_types = [
         'Account', 'Contact', 'Case', 'User'
@@ -109,12 +110,7 @@ async def get_basic_datamodel() -> dict:
 @mcp.tool()
 async def describe_sobject(sobject_name: str) -> dict:
     """returns the fields of a specific sObject in the salesforce scratch org"""
-
-    oauth_info = _get_jwt_token()
-    sf = Salesforce(
-        instance_url = oauth_info['instance_url'], 
-        session_id = oauth_info['access_token']
-    )
+    sf = get_sf_client()
 
     object_description = sf.__getattr__(sobject_name).describe()
 
@@ -154,12 +150,7 @@ async def insert_record(root_sobject: str, record: dict) -> dict:
     """inserts a record or nested records into the salesforce scratch org according to the provided record.
     """
     endpoint = f"composite/tree/{root_sobject}/"
-    
-    oauth_info = _get_jwt_token()
-    sf = Salesforce(
-        instance_url = oauth_info['instance_url'], 
-        session_id = oauth_info['access_token']
-    )
+    sf = get_sf_client()
    
     response = sf.restful(
         endpoint,
