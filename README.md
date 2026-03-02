@@ -4,6 +4,7 @@
 ![notes](notes.excalidraw.png)
 
 
+MCP Server is registered as external client app and authenticates via JWT Bearer Flow to the Salesforce scratch org. 
 
 ## Resources
 - https://github.com/salesforcecli/mcp
