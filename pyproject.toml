@@ -1,14 +1,15 @@
 [project]
-name = "mcp-test-data"
+name = "mcp-salesforce"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "datamodel-code-generator>=0.53.0",
-    "fastmcp>=3.0.0b1",
+    "fastmcp>=3.0,<4",
     "pydantic>=2.12.5",
     "pyjwt>=2.10.1",
     "requests>=2.32.5",
     "simple-salesforce>=1.12.9",
+    "fastmcp[openai]",
 ]
