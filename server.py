@@ -125,24 +125,24 @@ class ResultType(BaseModel):
     record: dict[str, Any]
     
 @mcp.tool()
-async def generate_nested_record(request: str, ctx: Context) -> ResultType:
-    """generates a Salesforce nested record according to the request"""
+async def generate_nested_record(user_specification: str, ctx: Context) -> ResultType:
+    """ generate a Salesforce nested record according to the user_specification. 
+    Available tools for sampling:
+    - describe_sobject: can be used to look up sObject schemas and their fields.
+    - tree_api_record_example: returns an example of a Composite Tree API compatible nested record.
+    """
     
     console.print("    [bold cyan]SERVER[/] Starting to generate record...")
-    example_record = example_nested_record()
     prompt = f"""Create a nested record, that is compatible 
-        with the Salesforce Composite Tree API and conforms to the provided request.
+        with the Salesforce Composite Tree API and conforms to the provided user_specification.
         
-        request:\n\n {request}
-
-        Example nested record: \n\n 
-        {example_record}
+        user_specification:\n\n {user_specification}
     """
 
     draft_record = await ctx.sample(
         messages=prompt,
-        system_prompt="You are a Salesforce expert. You are a Salesforce expert. Use describe_sobject when needed.",
-        tools=[describe_sobject],
+        system_prompt="You are a Salesforce expert. Use describe_sobject when needed.",
+        tools=[describe_sobject, tree_api_record_example],
         result_type=str,
         temperature=0.7,
         max_tokens=500
@@ -154,7 +154,6 @@ async def generate_nested_record(request: str, ctx: Context) -> ResultType:
         result_type=ResultType,
     )
 
-    # await ctx.info(f"generated record: {record.text}")
     console.print(f"    [bold cyan]SERVER[/] {str(record.result)}")
     return record.result
 
@@ -162,8 +161,9 @@ async def generate_nested_record(request: str, ctx: Context) -> ResultType:
 
 @mcp.tool()
 async def insert_record(root_sobject: str, record: dict) -> dict:
-    """inserts a record or nested records into the salesforce scratch org according to the provided record.
-        The root_sobject parameter specifies the sObject type of the top-level record in the provided record, which is required for the Salesforce Composite Tree API endpoint.
+    """ insert a record or nested record into the salesforce scratch org.
+        The root_sobject parameter specifies the sObject type of the top-level record in the provided record, 
+        which is required for the Salesforce Composite Tree API endpoint.
     """
     endpoint = f"composite/tree/{root_sobject}/"
     sf = get_sf_client()
@@ -175,8 +175,8 @@ async def insert_record(root_sobject: str, record: dict) -> dict:
     )
     return response
 
-def example_nested_record() -> str:
-    """example of a nested record structure that is compatible with the Salesforce Composite Tree API """
+def tree_api_record_example() -> str:
+    """example of a nested record that is compatible with the Salesforce Composite Tree API """
     return """{
         "records" :[{
             "attributes" : {"type" : "Account", "referenceId" : "ref1"},
@@ -213,18 +213,12 @@ async def main():
     handler = OpenAISamplingHandler(default_model="gpt-5")
 
     async with Client(mcp, sampling_handler=handler) as client:
-        request = "create a salesforce nested record for a case where an old lady has trouble with her wlan router. "
-        result = await client.call_tool("generate_nested_record", {"request": request})
+        user_specification = "create a salesforce nested record for a case where an old lady has trouble with her wlan router. "
+        result = await client.call_tool("generate_nested_record", {"user_specification": user_specification})
         console.print("LLM Response:", result)
-
-        
-       
-      
 
 
 if __name__ == "__main__":
     import asyncio
 
     asyncio.run(main())
-
-    # https://gofastmcp.com/servers/tools
