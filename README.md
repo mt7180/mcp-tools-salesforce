@@ -1,6 +1,8 @@
-# mcp-tools-salesforce
 
-# Salesforce MCP Server (server.py)
+
+# Salesforce MCP Server
+### (mcp-tools-salesforce)
+
 implements a Model Context Protocol (MCP) server that connects to a Salesforce org using JWT Bearer OAuth and exposes tools to inspect metadata and create/insert records (including Composite Tree API nested payloads).
 
 ![notes](notes.excalidraw.png)
