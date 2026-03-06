@@ -1,8 +1,10 @@
+
 from typing import Any, DefaultDict
-from fastmcp import FastMCP, Context
+from fastmcp import Client, FastMCP, Context
 from fastmcp.client.sampling.handlers.openai import OpenAISamplingHandler
+from pydantic import BaseModel
 from simple_salesforce import Salesforce
-from dataclasses import dataclass
+from rich.console import Console
 
 import jwt
 
@@ -11,7 +13,7 @@ import time
 import requests
 from dotenv import load_dotenv
 
-
+console = Console()
 dotenv_loaded = load_dotenv()
 
 CLIENT_ID = os.getenv('CLIENT_ID')
@@ -19,7 +21,7 @@ USERNAME = os.getenv('USERNAME')
 
 mcp = FastMCP("Custom Salesforce MCP Server",
     sampling_handler=OpenAISamplingHandler(default_model="gpt-4o-mini"),
-    sampling_handler_behavior="always")
+    sampling_handler_behavior="fallback")
 
 if dotenv_loaded:
     with open(os.getenv('PRIVATE_KEY_FILE'), 'r') as f:
@@ -75,7 +77,7 @@ def get_sf_client(
 
     return sf
 
-def extract_relevant_fields(object_description: dict) -> dict:
+async def extract_relevant_fields(object_description: dict) -> dict:
     if not object_description:
         return {}
     
@@ -88,8 +90,8 @@ def extract_relevant_fields(object_description: dict) -> dict:
 
 @mcp.tool()
 async def get_basic_datamodel() -> dict:
-    """returns the basic data model of my scratch org as dictionary 
-    of the most relevant sObject Types (like Account, Contact, Case and User) with their fields
+    """returns the basic data model of the scratch org as dictionary 
+    of the most relevant sObject Types (Account, Contact, Case and User) with their fields.
     """
 
     sf = get_sf_client()
@@ -110,44 +112,58 @@ async def get_basic_datamodel() -> dict:
 @mcp.tool()
 async def describe_sobject(sobject_name: str) -> dict:
     """returns the fields of a specific sObject in the salesforce scratch org"""
+    console.print(f"    [bold cyan]SERVER[/] Describe {sobject_name}...")
     sf = get_sf_client()
 
     object_description = sf.__getattr__(sobject_name).describe()
 
     if not object_description['createable']:
         return {}
-    return extract_relevant_fields(object_description)
+    return await extract_relevant_fields(object_description)
 
-@dataclass
-class ResultType:
-    record: dict
+class ResultType(BaseModel):
+    record: dict[str, Any]
     
 @mcp.tool()
-async def generate_nested_record(request: str, ctx: Context) -> dict:
+async def generate_nested_record(request: str, ctx: Context) -> ResultType:
     """generates a Salesforce nested record according to the request"""
     
-    prompt = f"""Generate a nested record as a JSON object, which is compatible 
-        with Salesforce Composite Tree API and conforms to the provided request: 
-        {request}
+    console.print("    [bold cyan]SERVER[/] Starting to generate record...")
+    example_record = example_nested_record()
+    prompt = f"""Create a nested record, that is compatible 
+        with the Salesforce Composite Tree API and conforms to the provided request.
+        
+        request:\n\n {request}
 
-        Example nested record: 
-        {example_nested_record()}
+        Example nested record: \n\n 
+        {example_record}
     """
 
-    record = await ctx.sample(
-        prompt,
-        result_type=ResultType,  
-        tools=[describe_sobject, example_nested_record],
+    draft_record = await ctx.sample(
+        messages=prompt,
+        system_prompt="You are a Salesforce expert. You are a Salesforce expert. Use describe_sobject when needed.",
+        tools=[describe_sobject],
+        result_type=str,
         temperature=0.7,
-        max_tokens=300
+        max_tokens=500
     )
-    # await ctx.info(f"generated record: {record.text}")
 
+    record = await ctx.sample(
+        messages=f'Normalize this into valid JSON under key "record":\n\n{draft_record.text}',
+        system_prompt="Return strictly valid JSON only.",
+        result_type=ResultType,
+    )
+
+    # await ctx.info(f"generated record: {record.text}")
+    console.print(f"    [bold cyan]SERVER[/] {str(record.result)}")
     return record.result
+
+
 
 @mcp.tool()
 async def insert_record(root_sobject: str, record: dict) -> dict:
     """inserts a record or nested records into the salesforce scratch org according to the provided record.
+        The root_sobject parameter specifies the sObject type of the top-level record in the provided record, which is required for the Salesforce Composite Tree API endpoint.
     """
     endpoint = f"composite/tree/{root_sobject}/"
     sf = get_sf_client()
@@ -159,10 +175,9 @@ async def insert_record(root_sobject: str, record: dict) -> dict:
     )
     return response
 
-@mcp.tool()
 def example_nested_record() -> str:
     """example of a nested record structure that is compatible with the Salesforce Composite Tree API """
-    return {
+    return """{
         "records" :[{
             "attributes" : {"type" : "Account", "referenceId" : "ref1"},
             "name" : "SampleAccount",
@@ -191,8 +206,25 @@ def example_nested_record() -> str:
             "numberOfEmployees" : "100",
             "industry" : "Banking"
             }]
-        }
+        }"""
+
+async def main():
+   
+    handler = OpenAISamplingHandler(default_model="gpt-5")
+
+    async with Client(mcp, sampling_handler=handler) as client:
+        request = "create a salesforce nested record for a case where an old lady has trouble with her wlan router. "
+        result = await client.call_tool("generate_nested_record", {"request": request})
+        console.print("LLM Response:", result)
+
+        
+       
+      
+
 
 if __name__ == "__main__":
-    mcp.run(transport="http", host="127.0.0.1", port=8000)
-    
+    import asyncio
+
+    asyncio.run(main())
+
+    # https://gofastmcp.com/servers/tools
