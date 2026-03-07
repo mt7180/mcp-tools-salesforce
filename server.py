@@ -1,103 +1,123 @@
 
-from typing import Any, DefaultDict
+from typing import Any
 from fastmcp import Client, FastMCP, Context
 from fastmcp.client.sampling.handlers.openai import OpenAISamplingHandler
 from pydantic import BaseModel
 from simple_salesforce import Salesforce
+from simple_salesforce.exceptions import SalesforceAuthenticationFailed, SalesforceExpiredSession
 from rich.console import Console
 
-import jwt
-
 import os
-import time
-import requests
 from dotenv import load_dotenv
 
 console = Console()
-dotenv_loaded = load_dotenv()
+load_dotenv()
 
 CLIENT_ID = os.getenv('CLIENT_ID')
 USERNAME = os.getenv('USERNAME')
+PRIVATE_KEY_FILE = os.getenv('PRIVATE_KEY_FILE')
+PRIVATE_KEY = os.getenv('PRIVATE_KEY')
+
+if PRIVATE_KEY_FILE:
+    with open(PRIVATE_KEY_FILE, 'r') as f:
+        PRIVATE_KEY = f.read()
 
 mcp = FastMCP("Custom Salesforce MCP Server",
     sampling_handler=OpenAISamplingHandler(default_model="gpt-4o-mini"),
     sampling_handler_behavior="fallback")
 
-if dotenv_loaded:
-    with open(os.getenv('PRIVATE_KEY_FILE'), 'r') as f:
-        PRIVATE_KEY = f.read()
-else:
-    PRIVATE_KEY = os.getenv('PRIVATE_KEY')
-
-assert PRIVATE_KEY is not None, "Private key must be provided either in .env file or as an environment variable."
-
 class TokenError(Exception):
     pass
 
-def _get_sf_client(
-        client_id=CLIENT_ID, 
-        username=USERNAME, 
-        private_key=PRIVATE_KEY, 
-        domain='login'
-    ) -> Salesforce:
+class SalesforceProvider:
+    def __init__(
+        self,
+        client_id: str | None,
+        username: str | None,
+        private_key: str | None,
+        domain: str = "login",
+    ):
+        self.client_id = client_id
+        self.username = username
+        self.private_key = private_key
+        self.domain = domain
+        self._sf: Salesforce | None = None
 
-    url = f'https://{domain}.salesforce.com/services/oauth2/token'
+    @staticmethod
+    def _auth_error_message(exc: SalesforceAuthenticationFailed) -> str:
+        details = getattr(exc, "content", str(exc))
+        return f"Failed to authenticate with Salesforce OAuth: {details}"
 
-    claim = {
-        'iss': client_id,
-        'sub': username,
-        'aud': f'https://{domain}.salesforce.com',
-        'exp': int(time.time()) + 300
-    }
-    
-    assertion = jwt.encode(claim, private_key, algorithm='RS256')
-    payload = {
-        'grant_type': 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-        'assertion': assertion
-    }
-    
-    response = requests.post(url, data=payload)
-    
-    try:
-        response_json = response.json()
-    except ValueError:
-        raise TokenError(f"Token endpoint returned non-JSON (status={response.status_code})")
+    def _login(self) -> Salesforce:
+        if not self.client_id or not self.username or not self.private_key:
+            raise TokenError(
+                "Missing Salesforce credentials. Set CLIENT_ID, USERNAME and PRIVATE_KEY (or PRIVATE_KEY_FILE)."
+            )
 
-    if response.status_code != 200 or 'error' in response_json:
-        err = response_json.get('error_description') or response_json.get('error') or response_json
-        raise TokenError(f"Failed to obtain token: {err}")
+        try:
+            return Salesforce(
+                username=self.username,
+                consumer_key=self.client_id,
+                privatekey=self.private_key,
+                domain=self.domain,
+            )
+        except SalesforceAuthenticationFailed as exc:
+            raise TokenError(self._auth_error_message(exc)) from exc
 
-    if not 'access_token' in response_json:
-        raise TokenError(f"No access_token in response: {response_json}")
-    
-    sf = Salesforce(
-        instance_url = response_json['instance_url'], 
-        session_id = response_json['access_token']
-    )
+    def _client(self) -> Salesforce:
+        if self._sf is None:
+            self._sf = self._login()
+        return self._sf
 
-    return sf
+    def _refresh_client(self) -> Salesforce:
+        self._sf = self._login()
+        return self._sf
 
-def get_sf_client( 
-        client_id=CLIENT_ID, 
-        username=USERNAME, 
-        private_key=PRIVATE_KEY, 
-        domain='login'
-) -> Salesforce:  
+    def _call(self, method_name: str, /, *args: Any, **kwargs: Any) -> Any:
+        for _ in range(2):
+            client = self._client()
+            try:
+                method = getattr(client, method_name)
+                return method(*args, **kwargs)
+            except SalesforceExpiredSession:
+                self._refresh_client()
+            except SalesforceAuthenticationFailed as exc:
+                self._sf = None
+                raise TokenError(self._auth_error_message(exc)) from exc
 
-    sf = Salesforce(
-        username=username, 
-        consumer_key=client_id, 
-        privatekey_file=private_key
-    )
+        raise TokenError("Salesforce session expired even after refresh.")
 
-    return sf
+    def query(self, soql_query: str) -> dict[str, Any]:
+        return self._call("query", soql_query)
+
+    def describe(self, sobject_name: str) -> dict[str, Any]:
+        for _ in range(2):
+            client = self._client()
+            try:
+                return getattr(client, sobject_name).describe()
+            except SalesforceExpiredSession:
+                self._refresh_client()
+            except SalesforceAuthenticationFailed as exc:
+                self._sf = None
+                raise TokenError(self._auth_error_message(exc)) from exc
+
+        raise TokenError("Salesforce session expired even after refresh.")
+
+    def restful(self, endpoint: str, method: str = "GET", **kwargs: Any) -> Any:
+        return self._call("restful", endpoint, method=method, **kwargs)
+
+
+sf_provider = SalesforceProvider(
+    client_id=CLIENT_ID,
+    username=USERNAME,
+    private_key=PRIVATE_KEY,
+)
 
 
 @mcp.tool()
 async def query_salesforce(soql_query: str) -> str:
     """Run a SOQL query against the Salesforce org and return results."""
-    sf = get_sf_client()
-    result = sf.query(soql_query)
+    result = sf_provider.query(soql_query)
     records = result.get("records", [])
     return str(records)
 
@@ -119,8 +139,6 @@ async def get_basic_datamodel() -> dict:
     of the most relevant sObject Types (Account, Contact, Case and User) with their fields.
     """
 
-    sf = get_sf_client()
-
     basic_sobject_types = [
         'Account', 'Contact', 'Case', 'User'
     ]
@@ -128,9 +146,9 @@ async def get_basic_datamodel() -> dict:
     data_model = {}
 
     for sobject in basic_sobject_types:
-        object_description = sf.__getattr__(sobject).describe()
+        object_description = sf_provider.describe(sobject)
         if object_description['createable']:
-            data_model[sobject] = extract_relevant_fields(object_description)
+            data_model[sobject] = await extract_relevant_fields(object_description)
     return data_model
 
     
@@ -138,9 +156,7 @@ async def get_basic_datamodel() -> dict:
 async def describe_sobject(sobject_name: str) -> dict:
     """returns the fields of a specific sObject in the salesforce scratch org"""
     console.print(f"    [bold cyan]SERVER[/] Describe {sobject_name}...")
-    sf = get_sf_client()
-
-    object_description = sf.__getattr__(sobject_name).describe()
+    object_description = sf_provider.describe(sobject_name)
 
     if not object_description['createable']:
         return {}
@@ -191,13 +207,7 @@ async def insert_record(root_sobject: str, record: dict) -> dict:
         which is required for the Salesforce Composite Tree API endpoint.
     """
     endpoint = f"composite/tree/{root_sobject}/"
-    sf = get_sf_client()
-   
-    response = sf.restful(
-        endpoint,
-        method='POST',
-        json=record
-    )
+    response = sf_provider.restful(endpoint, method='POST', json=record)
     return response
 
 def tree_api_record_example() -> str:
