@@ -25,10 +25,6 @@ mcp = FastMCP("Custom Salesforce MCP Server",
     sampling_handler=OpenAISamplingHandler(default_model=SAMPLING_MODEL),
     sampling_handler_behavior="fallback")
 
-class TokenError(Exception):
-    pass
-
-
 def get_sf_client( 
         client_id=CLIENT_ID, 
         username=USERNAME, 
@@ -50,7 +46,8 @@ async def query_salesforce(soql_query: str) -> list[dict]:
     records = result.get("records", [])
     return records
 
-def extract_relevant_fields(object_description: dict) -> dict:
+
+def extract_creatable_fields(object_description: dict) -> dict:
     if not object_description:
         return {}
     
@@ -61,24 +58,24 @@ def extract_relevant_fields(object_description: dict) -> dict:
     }
 
 
-@mcp.tool()
+@mcp.tool(
+    description=(
+        "Get the basic data model of the scratch org."
+        "This which includes the sObjects Account, Contact, "
+        "Case and User with their respective creatable fields."
+    )
+)
 async def get_basic_datamodel() -> dict:
-    """returns the basic data model of the scratch org as dictionary 
-    of the most relevant sObject Types (Account, Contact, Case and User) with their fields.
-    """
-
+    console.print(f"    [bold cyan]SERVER[/] Describe basic data model...")
     sf = get_sf_client()
 
-    basic_sobject_types = [
-        'Account', 'Contact', 'Case', 'User'
-    ]
-
+    basic_sobject_types = ['Account', 'Contact', 'Case', 'User']
     data_model = {}
 
     for sobject in basic_sobject_types:
         object_description = sf.__getattr__(sobject).describe()
         if object_description['createable']:
-            data_model[sobject] = extract_relevant_fields(object_description)
+            data_model[sobject] = extract_creatable_fields(object_description)
     return data_model
 
     
@@ -89,32 +86,32 @@ async def describe_sobject(sobject_name: str) -> dict:
     sf = get_sf_client()
 
     object_description = sf.__getattr__(sobject_name).describe()
-
     if not object_description['createable']:
         return {}
-    return extract_relevant_fields(object_description)
+    return extract_creatable_fields(object_description)
 
 class ResultType(BaseModel):
     record: dict[str, Any]
     
-@mcp.tool()
+@mcp.tool(
+    description=(
+        "Generate a nested record according to the user specification. "
+        "The generated record must be compatible with the Salesforce Composite Tree API. "
+        "Includes the describe_sobject tool to look up sObject schemas and their fields when needed."
+    )
+)
 async def generate_nested_record(user_specification: str, ctx: Context) -> ResultType:
-    """ generate a Salesforce nested record according to the user_specification. 
-    Available tools for sampling:
-    - describe_sobject: can be used to look up sObject schemas and their fields.
-    - tree_api_record_example: returns an example of a Composite Tree API compatible nested record.
-    """
-    
     console.print("    [bold cyan]SERVER[/] Starting to generate record...")
-    prompt = f"""Create a nested record, that is compatible 
-        with the Salesforce Composite Tree API and conforms to the provided user_specification.
-        
-        user_specification:\n\n {user_specification}
-    """
+
+    prompt = (
+        "Create a nested record, that is compatible with the Salesforce Composite Tree API "
+        "and conforms to the provided user_specification.\n\n"
+        f"user_specification:\n\n {user_specification}"
+    )
 
     draft_record = await ctx.sample(
         messages=prompt,
-        system_prompt="You are a Salesforce expert. Use describe_sobject when needed.",
+        system_prompt="You are a Salesforce expert.",
         tools=[describe_sobject, tree_api_record_example],
         result_type=str,
         temperature=0.7,
@@ -186,12 +183,19 @@ async def main():
     handler = OpenAISamplingHandler(default_model=SAMPLING_MODEL)
 
     async with Client(mcp, sampling_handler=handler) as client:
-        user_specification = "create a salesforce nested record for a case where an old lady has trouble with her wlan router. "
-        result = await client.call_tool("generate_nested_record", {"user_specification": user_specification})
-        console.print("LLM Response:", result.structured_content)
-
-        result = await client.call_tool("query_salesforce", {"soql_query": "SELECT Id, Name FROM Account"})
-        console.print("LLM Response:", result.structured_content)
+        tool_to_call = "generate_nested_record"
+        
+        match tool_to_call:
+            case "generate_nested_record":
+                user_specification = "create a salesforce nested record for a case where an old lady has trouble with her wlan router."
+                result = await client.call_tool("generate_nested_record", {"user_specification": user_specification})
+                console.print("LLM Response:", result.structured_content)
+            case "query_salesforce":
+                result = await client.call_tool("query_salesforce", {"soql_query": "SELECT Id, Name FROM Account"})
+                console.print("LLM Response:", result.structured_content)
+            case "get_basic_datamodel":
+                result = await client.call_tool("get_basic_datamodel", {})
+                console.print("LLM Response:", result.structured_content)
 
 
 if __name__ == "__main__":
