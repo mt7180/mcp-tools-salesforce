@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 console = Console()
 dotenv_loaded = load_dotenv()
 
+SAMPLING_MODEL = "gpt-5"
 CLIENT_ID = os.getenv('CLIENT_ID')
 USERNAME = os.getenv('USERNAME')
 PRIVATE_KEY_FILE = os.getenv('PRIVATE_KEY_FILE')
@@ -21,7 +22,7 @@ if PRIVATE_KEY_FILE:
         PRIVATE_KEY = f.read()
 
 mcp = FastMCP("Custom Salesforce MCP Server",
-    sampling_handler=OpenAISamplingHandler(default_model="gpt-4o-mini"),
+    sampling_handler=OpenAISamplingHandler(default_model=SAMPLING_MODEL),
     sampling_handler_behavior="fallback")
 
 class TokenError(Exception):
@@ -182,7 +183,7 @@ def tree_api_record_example() -> str:
 
 async def main():
    
-    handler = OpenAISamplingHandler(default_model="gpt-5")
+    handler = OpenAISamplingHandler(default_model=SAMPLING_MODEL)
 
     async with Client(mcp, sampling_handler=handler) as client:
         user_specification = "create a salesforce nested record for a case where an old lady has trouble with her wlan router. "
