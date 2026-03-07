@@ -1,16 +1,11 @@
-
-from typing import Any, DefaultDict
+from typing import Any
 from fastmcp import Client, FastMCP, Context
 from fastmcp.client.sampling.handlers.openai import OpenAISamplingHandler
 from pydantic import BaseModel
 from simple_salesforce import Salesforce
 from rich.console import Console
 
-import jwt
-
 import os
-import time
-import requests
 from dotenv import load_dotenv
 
 console = Console()
@@ -18,91 +13,43 @@ dotenv_loaded = load_dotenv()
 
 CLIENT_ID = os.getenv('CLIENT_ID')
 USERNAME = os.getenv('USERNAME')
+PRIVATE_KEY_FILE = os.getenv('PRIVATE_KEY_FILE')
+PRIVATE_KEY = os.getenv('PRIVATE_KEY')
+
+if PRIVATE_KEY_FILE:
+    with open(PRIVATE_KEY_FILE, 'r') as f:
+        PRIVATE_KEY = f.read()
 
 mcp = FastMCP("Custom Salesforce MCP Server",
     sampling_handler=OpenAISamplingHandler(default_model="gpt-4o-mini"),
     sampling_handler_behavior="fallback")
 
-if dotenv_loaded:
-    with open(os.getenv('PRIVATE_KEY_FILE'), 'r') as f:
-        PRIVATE_KEY = f.read()
-else:
-    PRIVATE_KEY = os.getenv('PRIVATE_KEY')
-
-assert PRIVATE_KEY is not None, "Private key must be provided either in .env file or as an environment variable."
-
 class TokenError(Exception):
     pass
 
-def _get_sf_client(
-        client_id=CLIENT_ID, 
-        username=USERNAME, 
-        private_key=PRIVATE_KEY, 
-        domain='login'
-    ) -> Salesforce:
-
-    url = f'https://{domain}.salesforce.com/services/oauth2/token'
-
-    claim = {
-        'iss': client_id,
-        'sub': username,
-        'aud': f'https://{domain}.salesforce.com',
-        'exp': int(time.time()) + 300
-    }
-    
-    assertion = jwt.encode(claim, private_key, algorithm='RS256')
-    payload = {
-        'grant_type': 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-        'assertion': assertion
-    }
-    
-    response = requests.post(url, data=payload)
-    
-    try:
-        response_json = response.json()
-    except ValueError:
-        raise TokenError(f"Token endpoint returned non-JSON (status={response.status_code})")
-
-    if response.status_code != 200 or 'error' in response_json:
-        err = response_json.get('error_description') or response_json.get('error') or response_json
-        raise TokenError(f"Failed to obtain token: {err}")
-
-    if not 'access_token' in response_json:
-        raise TokenError(f"No access_token in response: {response_json}")
-    
-    sf = Salesforce(
-        instance_url = response_json['instance_url'], 
-        session_id = response_json['access_token']
-    )
-
-    return sf
 
 def get_sf_client( 
         client_id=CLIENT_ID, 
         username=USERNAME, 
-        private_key=PRIVATE_KEY, 
-        domain='login'
+        private_key=PRIVATE_KEY,
 ) -> Salesforce:  
 
-    sf = Salesforce(
+    return Salesforce(
         username=username, 
         consumer_key=client_id, 
-        privatekey_file=private_key
+        privatekey=private_key
     )
-
-    return sf
 
 
 @mcp.tool()
-async def query_salesforce(soql_query: str) -> str:
+async def query_salesforce(soql_query: str) -> list[dict]:
     """Run a SOQL query against the Salesforce org and return results."""
     sf = get_sf_client()
     result = sf.query(soql_query)
     records = result.get("records", [])
-    return str(records)
+    return records
 
-
-async def extract_relevant_fields(object_description: dict) -> dict:
+def extract_relevant_fields(object_description: dict) -> dict:
     if not object_description:
         return {}
     
@@ -144,7 +91,7 @@ async def describe_sobject(sobject_name: str) -> dict:
 
     if not object_description['createable']:
         return {}
-    return await extract_relevant_fields(object_description)
+    return extract_relevant_fields(object_description)
 
 class ResultType(BaseModel):
     record: dict[str, Any]
@@ -240,10 +187,10 @@ async def main():
     async with Client(mcp, sampling_handler=handler) as client:
         user_specification = "create a salesforce nested record for a case where an old lady has trouble with her wlan router. "
         result = await client.call_tool("generate_nested_record", {"user_specification": user_specification})
-        console.print("LLM Response:", result)
+        console.print("LLM Response:", result.structured_content)
 
-       # result = await client.call_tool("query_salesforce", {"soql": "SELECT Id, Name FROM Account"})
-       # console.print("LLM Response:", result)
+        result = await client.call_tool("query_salesforce", {"soql_query": "SELECT Id, Name FROM Account"})
+        console.print("LLM Response:", result.structured_content)
 
 
 if __name__ == "__main__":
