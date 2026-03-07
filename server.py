@@ -34,7 +34,7 @@ assert PRIVATE_KEY is not None, "Private key must be provided either in .env fil
 class TokenError(Exception):
     pass
 
-def get_sf_client(
+def _get_sf_client(
         client_id=CLIENT_ID, 
         username=USERNAME, 
         private_key=PRIVATE_KEY, 
@@ -76,6 +76,31 @@ def get_sf_client(
     )
 
     return sf
+
+def get_sf_client( 
+        client_id=CLIENT_ID, 
+        username=USERNAME, 
+        private_key=PRIVATE_KEY, 
+        domain='login'
+) -> Salesforce:  
+
+    sf = Salesforce(
+        username=username, 
+        consumer_key=client_id, 
+        privatekey_file=private_key
+    )
+
+    return sf
+
+
+@mcp.tool()
+async def query_salesforce(soql_query: str) -> str:
+    """Run a SOQL query against the Salesforce org and return results."""
+    sf = get_sf_client()
+    result = sf.query(soql_query)
+    records = result.get("records", [])
+    return str(records)
+
 
 async def extract_relevant_fields(object_description: dict) -> dict:
     if not object_description:
@@ -216,6 +241,9 @@ async def main():
         user_specification = "create a salesforce nested record for a case where an old lady has trouble with her wlan router. "
         result = await client.call_tool("generate_nested_record", {"user_specification": user_specification})
         console.print("LLM Response:", result)
+
+       # result = await client.call_tool("query_salesforce", {"soql": "SELECT Id, Name FROM Account"})
+       # console.print("LLM Response:", result)
 
 
 if __name__ == "__main__":
