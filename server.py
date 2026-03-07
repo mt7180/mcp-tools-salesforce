@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 console = Console()
 dotenv_loaded = load_dotenv()
 
-SAMPLING_MODEL = "gpt-5"
+SAMPLING_MODEL = "gpt-4o-mini"
 CLIENT_ID = os.getenv('CLIENT_ID')
 USERNAME = os.getenv('USERNAME')
 PRIVATE_KEY_FILE = os.getenv('PRIVATE_KEY_FILE')
