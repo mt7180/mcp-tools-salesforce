@@ -1,3 +1,4 @@
+import json
 from typing import Any
 from fastmcp import Client, FastMCP, Context
 from fastmcp.client.sampling.handlers.openai import OpenAISamplingHandler
@@ -57,13 +58,14 @@ def extract_creatable_fields(object_description: dict) -> dict:
         if field['createable']
     }
 
+tool_description = (
+    "Get the basic data model of the scratch org."
+    "This includes the sObjects Account, Contact, "
+    "Case and User with their respective creatable fields."
+)
 
 @mcp.tool(
-    description=(
-        "Get the basic data model of the scratch org."
-        "This which includes the sObjects Account, Contact, "
-        "Case and User with their respective creatable fields."
-    )
+    description=tool_description
 )
 async def get_basic_datamodel() -> dict:
     console.print(f"    [bold cyan]SERVER[/] Describe basic data model...")
@@ -95,23 +97,25 @@ class ResultType(BaseModel):
     
 @mcp.tool(
     description=(
-        "Generate a nested record according to the user specification. "
-        "The generated record must be compatible with the Salesforce Composite Tree API. "
-        "Includes the describe_sobject tool to look up sObject schemas and their fields when needed."
+        "Generate a nested Salesforce record according to the user specification. "
+        "Includes the describe_sobject tool to look up sObject schemas and their fields "
+        "when needed, as well as tree_api_record_example."
     )
 )
 async def generate_nested_record(user_specification: str, ctx: Context) -> ResultType:
     console.print("    [bold cyan]SERVER[/] Starting to generate record...")
 
     prompt = (
-        "Create a nested record, that is compatible with the Salesforce Composite Tree API "
-        "and conforms to the provided user_specification.\n\n"
+        "Create a nested record, that is compatible with the Salesforce Composite Tree API. "
+        "Include multiple levels of nesting and use the describe_sobject tool "
+        "to ensure the record structure is valid according to the Salesforce scratch org's data model. "
+        "Make sure to strictly follow the user specification.\n\n"
         f"user_specification:\n\n {user_specification}"
     )
 
     draft_record = await ctx.sample(
         messages=prompt,
-        system_prompt="You are a Salesforce expert.",
+        system_prompt="You are a Salesforce expert. When generating records, be very creative with names and case designs.",
         tools=[describe_sobject, tree_api_record_example],
         result_type=str,
         temperature=0.7,
@@ -129,12 +133,14 @@ async def generate_nested_record(user_specification: str, ctx: Context) -> Resul
 
 
 
-@mcp.tool()
+@mcp.tool(
+    description=(
+        "Insert a record or nested record into the salesforce scratch org. "
+        "The root_sobject parameter specifies the sObject type of the top-level record in the provided record, "
+        "which is required for the Salesforce Composite Tree API endpoint."
+    )
+)
 async def insert_record(root_sobject: str, record: dict) -> dict:
-    """ insert a record or nested record into the salesforce scratch org.
-        The root_sobject parameter specifies the sObject type of the top-level record in the provided record, 
-        which is required for the Salesforce Composite Tree API endpoint.
-    """
     endpoint = f"composite/tree/{root_sobject}/"
     sf = get_sf_client()
    
@@ -147,36 +153,9 @@ async def insert_record(root_sobject: str, record: dict) -> dict:
 
 def tree_api_record_example() -> str:
     """example of a nested record that is compatible with the Salesforce Composite Tree API """
-    return """{
-        "records" :[{
-            "attributes" : {"type" : "Account", "referenceId" : "ref1"},
-            "name" : "SampleAccount",
-            "phone" : "1234567890",
-            "website" : "www.salesforce.com",
-            "numberOfEmployees" : "100",
-            "industry" : "Banking",
-            "Contacts" : {
-            "records" : [{
-                "attributes" : {"type" : "Contact", "referenceId" : "ref2"},
-                "lastname" : "Smith",
-                "title" : "President",
-                "email" : "sample@salesforce.com"
-                },{         
-                "attributes" : {"type" : "Contact", "referenceId" : "ref3"},
-                "lastname" : "Evans",
-                "title" : "Vice President",
-                "email" : "sample@salesforce.com"
-                }]
-            }
-            },{
-            "attributes" : {"type" : "Account", "referenceId" : "ref4"},
-            "name" : "SampleAccount2",
-            "phone" : "1234567890",
-            "website" : "www.salesforce2.com",
-            "numberOfEmployees" : "100",
-            "industry" : "Banking"
-            }]
-        }"""
+    file_path = "tree_api_record.json"
+    with open(file_path, "r") as file:
+        return json.dumps(json.load(file))
 
 async def main():
    
