@@ -98,24 +98,29 @@ class ResultType(BaseModel):
 @mcp.tool(
     description=(
         "Generate a nested Salesforce record according to the user specification. "
-        "Includes the describe_sobject tool to look up sObject schemas and their fields "
-        "when needed, as well as tree_api_record_example."
+        "Includes the describe_sobject tool to look up sObject schemas "
+        "and their fields when needed, as well as tree_api_record_example."
     )
 )
 async def generate_nested_record(user_specification: str, ctx: Context) -> ResultType:
     console.print("    [bold cyan]SERVER[/] Starting to generate record...")
 
     prompt = (
-        "Create a nested record, that is compatible with the Salesforce Composite Tree API. "
-        "Include multiple levels of nesting and use the describe_sobject tool "
-        "to ensure the record structure is valid according to the Salesforce scratch org's data model. "
+        "Create a nested record, that is compatible with the "
+        "Salesforce Composite Tree API. "
+        "Include multiple levels of nesting and use the "
+        "describe_sobject tool to ensure the record structure is "
+        "valid according to the Salesforce scratch org's data model. "
         "Make sure to strictly follow the user specification.\n\n"
         f"user_specification:\n\n {user_specification}"
     )
 
     draft_record = await ctx.sample(
         messages=prompt,
-        system_prompt="You are a Salesforce expert. When generating records, be very creative with names and case designs.",
+        system_prompt=( 
+            "You are a Salesforce expert. When generating records, "
+            "be very creative with names and case designs."
+        ),
         tools=[describe_sobject, tree_api_record_example],
         result_type=str,
         temperature=0.7,
