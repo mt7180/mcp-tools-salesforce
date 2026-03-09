@@ -41,7 +41,7 @@ def get_sf_client(
 
 @mcp.tool()
 async def query_salesforce(soql_query: str) -> list[dict]:
-    """Run a SOQL query against the Salesforce org and return results."""
+    """Run a Salesforce SOQL query against the connected scratch org."""
     sf = get_sf_client()
     result = sf.query(soql_query)
     records = result.get("records", [])
