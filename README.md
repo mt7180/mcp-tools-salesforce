@@ -1,7 +1,7 @@
 # mcp-tools-salesforce
 ### Custom MCP Server that Connects to Salesforce Scratch Orgs — and Lets AI Generate Test Data
 
-> 📝 [Read the full write-up on Medium](https://medium.com/@mira.theidel/how-to-connect-your-custom-mcp-server-to-salesforce-scratch-orgs-and-let-ai-generate-your-test-270ec91b41be?postPublishedType=repub)
+> 📝 [Read the full write-up on Medium](https://medium.com/@mira.theidel/how-to-connect-your-custom-mcp-server-to-salesforce-scratch-orgs-and-let-ai-generate-your-test-270ec91b41be)
 
 A custom MCP server built with FastMCP that connects to a Salesforce scratch org via JWT Bearer Flow. It uses MCP Sampling to let an LLM autonomously look up the data model, generate realistic nested test records, and insert them via the Composite Tree REST API. You describe the scenario in plain English. The server does the rest.
 
@@ -19,7 +19,7 @@ A custom MCP server built with FastMCP that connects to a Salesforce scratch org
 
 &nbsp;&nbsp;
 
-> **Note:** `generate_nested_record` uses MCP Sampling with structured output. Authentication via JWT Bearer Flow.
+> **Note:** `generate_nested_record` uses MCP Sampling with tools + structured output. Authentication via JWT Bearer Flow.
 
 ## Resources
 - https://help.salesforce.com/s/articleView?id=xcloud.jwt_connectedapp_enable.htm&type=5
