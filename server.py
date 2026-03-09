@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 console = Console()
 dotenv_loaded = load_dotenv()
 
-SAMPLING_MODEL = "gpt-4o-mini"
+SAMPLING_MODEL = "gpt-4o"
 CLIENT_ID = os.getenv('CLIENT_ID')
 USERNAME = os.getenv('USERNAME')
 PRIVATE_KEY_FILE = os.getenv('PRIVATE_KEY_FILE')
@@ -119,7 +119,8 @@ async def generate_nested_record(user_specification: str, ctx: Context) -> Resul
         messages=prompt,
         system_prompt=( 
             "You are a Salesforce expert. When generating records, "
-            "be very creative with names and case designs."
+            "be very creative with names and case designs, don't"
+            "use the names of the provided record example."
         ),
         tools=[describe_sobject, tree_api_record_example],
         result_type=str,
