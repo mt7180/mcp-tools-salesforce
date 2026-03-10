@@ -142,8 +142,9 @@ async def generate_nested_record(user_specification: str, ctx: Context) -> Resul
 @mcp.tool(
     description=(
         "Insert a record or nested record into the salesforce scratch org. "
-        "The root_sobject parameter specifies the sObject type of the top-level record in the provided record, "
-        "which is required for the Salesforce Composite Tree API endpoint."
+        "The root_sobject parameter specifies the sObject type of the top-level record "
+        "in the provided record, which is required for the Salesforce Composite Tree "
+        "API endpoint."
     )
 )
 async def insert_record(root_sobject: str, record: dict) -> dict:
@@ -170,7 +171,10 @@ async def main():
 
         match tool_to_call:
             case "generate_nested_record":
-                user_specification = "create a salesforce nested record for a case where an old lady has trouble with her wlan router."
+                user_specification = (
+                    "create a salesforce nested record for a case where an elderly"
+                    " lady has trouble with her wlan router."
+                )
                 result = await client.call_tool(
                     "generate_nested_record", {"user_specification": user_specification}
                 )
