@@ -3,24 +3,33 @@ from typing import Any
 from fastmcp import Client, FastMCP, Context
 from fastmcp.client.sampling.handlers.openai import OpenAISamplingHandler
 from pydantic import BaseModel
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from simple_salesforce import Salesforce
 from rich.console import Console
-
 import os
-from dotenv import load_dotenv
 
 console = Console()
-dotenv_loaded = load_dotenv()
+
+
+class Settings(BaseSettings):
+    OPENAI_API_KEY: str
+    CLIENT_ID: str
+    USERNAME: str
+    PRIVATE_KEY_FILE: str | None = None
+    PRIVATE_KEY: str | None = None
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+
+settings = Settings()
 
 SAMPLING_MODEL = "gpt-4o"
-CLIENT_ID = os.getenv("CLIENT_ID")
-USERNAME = os.getenv("USERNAME")
-PRIVATE_KEY_FILE = os.getenv("PRIVATE_KEY_FILE")
-PRIVATE_KEY = os.getenv("PRIVATE_KEY")
 
-if PRIVATE_KEY_FILE:
-    with open(PRIVATE_KEY_FILE, "r") as f:
-        PRIVATE_KEY = f.read()
+os.environ["OPENAI_API_KEY"] = settings.OPENAI_API_KEY
+
+if settings.PRIVATE_KEY_FILE:
+    with open(settings.PRIVATE_KEY_FILE, "r") as f:
+        settings.PRIVATE_KEY = f.read()
 
 mcp = FastMCP(
     "Custom Salesforce MCP Server",
@@ -30,9 +39,9 @@ mcp = FastMCP(
 
 
 def get_sf_client(
-    client_id=CLIENT_ID,
-    username=USERNAME,
-    private_key=PRIVATE_KEY,
+    client_id=settings.CLIENT_ID,
+    username=settings.USERNAME,
+    private_key=settings.PRIVATE_KEY,
 ) -> Salesforce:
 
     return Salesforce(username=username, consumer_key=client_id, privatekey=private_key)
