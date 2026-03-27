@@ -55,7 +55,8 @@ bash setup.sh
 Idempotent — only installs dependencies when `requirements.txt` has changed.
 
 After running setup.sh, confirm the output contains `"status": "success"` 
-before proceeding. If status is "error", stop and report to the user.
+before proceeding. If status is "error", stop and report to the user.  
+
 ---
 
 ### Step 2 — Introspect the data model (REQUIRED before Step 3)
@@ -142,6 +143,7 @@ The script returns structured JSON:
     "results": [...]
   }
 }
+```
 
 after running, confirm the output contains `"status": "success"` and `"hasErrors": false` before proceeding. If status is "error" or hasErrors is true, stop and report to the user.
 
