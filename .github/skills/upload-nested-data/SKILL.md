@@ -79,6 +79,7 @@ The script returns structured JSON:
     }
   }
 }
+```
 
 Only use fields from data where nillable and type match your intended payload.
 
