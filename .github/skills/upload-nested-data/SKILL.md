@@ -27,6 +27,7 @@ Do **not** use this skill when:
 - **NEVER** read, display, or modify `.env` or `server.key` — scripts handle auth autonomously
 - Always use the skill's venv Python directly: `.github/skills/upload-nested-data/scripts/.venv/bin/python`
 - Execute all steps **sequentially** — do not build a payload before confirming field accessibility
+- Run python scripts from the `scripts` directory to ensure correct relative paths
 - Always create a **new** timestamped payload file, never reuse old ones
 - Scripts return **structured JSON** (`status`, `data`, `error`) — always parse the response instead of relying on raw stdout
 
