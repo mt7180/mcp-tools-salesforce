@@ -1,77 +1,43 @@
+import argparse
 import json
-import asyncio
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from simple_salesforce import Salesforce
-from pathlib import Path
+import sys
 
 from sf_client import get_sf_client
 
-BASEDIR = Path(__file__).parent.parent
 
-class Settings(BaseSettings):
-    CLIENT_ID: str
-    USERNAME: str
-    PRIVATE_KEY_FILE: str | None = None
-    PRIVATE_KEY: str | None = None
-
-    model_config = SettingsConfigDict(env_file=BASEDIR / ".env", extra="ignore")
-
-
-def describe_creatable_fields(sobject_name: str) -> dict:
-    settings = Settings()
-    sf = get_sf_client(settings)
-
-    description = getattr(sf, sobject_name).describe()
-
+def describe_creatable_fields(sobject: str) -> dict:
+    sf = get_sf_client()
+    description = getattr(sf, sobject).describe()
     if not description.get("createable"):
         return {}
-
     return {
-        field["name"]: {
-            "type": field["type"],
-            "nillable": field["nillable"],
-        }
+        field["name"]: {"type": field["type"], "nillable": field["nillable"]}
         for field in description["fields"]
-        if field["createable"]
+        if field.get("createable")
     }
 
 
-async def main(sobject: str) -> dict:
+def fetch_metadata(sobject: str) -> dict:
     try:
-        return {
-            "status": "success",
-            "data": describe_creatable_fields(sobject),
-        }
+        return {"status": "success", "data": describe_creatable_fields(sobject)}
     except Exception as e:
-        return {
-            "status": "error",
-            "error": str(e),
-        }
+        return {"status": "error", "error": str(e)}
 
+
+def parse_args(argv=None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="List creatable fields for an sObject.")
+    parser.add_argument("sobject", help="API name of the sObject (e.g., Account)")
+    return parser.parse_args(argv)
+
+
+def main(argv=None) -> int:
+    args = parse_args(argv)
+    result = fetch_metadata(args.sobject)
+
+    print(json.dumps(result))
+    return 0 if result.get("status") == "success" else 1
 
 
 if __name__ == "__main__":
-    import sys
-    
-    # Check if argument is provided
-    if len(sys.argv) < 2:
-        error_result = {
-            "status": "error",
-            "error": "Missing required argument: sobject name"
-        }
-        print(json.dumps(error_result))
-        sys.stdout.flush()
-        sys.exit(1)
-    
-    # Run the main function
-    result = asyncio.run(main(sys.argv[1]))
-    
-    # Print result and flush output to ensure it's immediately available
-    print(json.dumps(result))
-    sys.stdout.flush()
-    
-    # Exit with appropriate code
-    if result.get("status") == "error":
-        sys.exit(1)
-    else:
-        sys.exit(0)
+    sys.exit(main())
+   

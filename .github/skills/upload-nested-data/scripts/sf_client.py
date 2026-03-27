@@ -1,6 +1,8 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from simple_salesforce import Salesforce
+from pathlib import Path
 
+BASEDIR = Path(__file__).parent.parent
 
 class Settings(BaseSettings):
     CLIENT_ID: str
@@ -8,10 +10,11 @@ class Settings(BaseSettings):
     PRIVATE_KEY_FILE: str | None = None
     PRIVATE_KEY: str | None = None
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=BASEDIR / ".env", extra="ignore")
 
+def get_sf_client() -> Salesforce:
 
-def get_sf_client(settings: Settings) -> Salesforce:
+    settings = Settings()
 
     private_key = settings.PRIVATE_KEY
     if settings.PRIVATE_KEY_FILE:

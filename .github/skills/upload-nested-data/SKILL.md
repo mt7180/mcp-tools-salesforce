@@ -48,7 +48,7 @@ All scripts live at `.github/skills/upload-nested-data/scripts/`.
 
 ### Step 1 — Setup
 ```bash
-bash .github/skills/upload-nested-data/scripts/setup.sh
+bash setup.sh
 ```
 
 Idempotent — only installs dependencies when `requirements.txt` has changed.
@@ -63,7 +63,7 @@ Do not build the payload until you have analyzed this output — field names and
 Run for each sObject in the hierarchy and do not rely on stdout formatting — always parse the JSON response.
 
 ```bash
-.github/skills/upload-nested-data/scripts/.venv/bin/python .github/skills/upload-nested-data/scripts/describe_sobject.py <sObject>
+.venv/bin/python describe_sobject.py <sObject>
 ```
 
 Output format
@@ -126,7 +126,7 @@ Create `payload_<YYYYMMDD_HHMMSS>.json` following the Composite Tree format:
 
 ### Step 4 — Insert
 ```bash
-.github/skills/upload-nested-data/scripts/.venv/bin/python .github/skills/upload-nested-data/scripts/insert_record.py <sObject> <payload-file>
+.venv/bin/python insert_record.py <sObject> <payload-file>
 ```
 
 Output format
