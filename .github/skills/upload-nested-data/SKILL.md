@@ -1,105 +1,114 @@
-# Skill: Upload Nested Record to Salesforce Scratch Org
+---
+name: upload-nested-data
+description: Insert a nested Salesforce record hierarchy into a scratch org via the Composite Tree REST API. Use when asked to create nested test data, insert parent-child record hierarchies (Account → Contact → Case), or populate demo environments in a Salesforce scratch org.
+---
 
-Insert a nested Salesforce record hierarchy into a scratch org via the **Composite Tree REST API**. All scripts authenticate autonomously via JWT Bearer Flow — the agent never handles or passes access tokens or key files.
+# Upload Nested Record to Salesforce Scratch Org
 
-## When to use
+Inserts a nested record hierarchy into a scratch org via the **Composite Tree REST API**. Authentication is handled automatically via JWT Bearer Flow.
 
-Use this skill when asked to:
-- Create nested test data in a Salesforce scratch org (e.g. Account with Contacts and Cases)
-- Insert a record hierarchy via the Composite Tree API endpoint
-- Generate and upload sObject payloads that match the actual data model of the connected org
-- Set up related parent-child records in a single API call (up to 200 records, 5 nesting levels)
-- Populate demo environments with Account → Contact → Case type scenarios
+## When to Use
 
-## Scripts
+Use this skill when you need to:
 
-All scripts live at `.github/skills/upload-nested-data/scripts/` relative to the project root.
+- Insert **parent-child record hierarchies** in a single API call (e.g. Account → Contact → Case)
+- Create **nested test data** for a Salesforce scratch org
+- **Populate demo or sandbox environments** with realistic, related records
 
-| File | Purpose |
-|---|---|
-| `scripts/describe_sobject.py` | Prints creatable fields for a given sObject |
-| `scripts/insert_record.py` | POSTs a JSON payload to the Composite Tree API |
-| `scripts/example_payload.json` | Example payload (Account → Contact → Case) |
 
-**Run all commands from the project root** so that `pydantic-settings` picks up the `.env` file there.
+Do **not** use this skill when:
+- The hierarchy exceeds 200 records or 5 nesting levels (Composite Tree API limit)
+- You need to update or upsert existing records (this skill is insert-only)
 
 ---
 
-## Important notes
+## Important
 
-**NEVER** read, modify, or display the contents of `.env` or `server.key` files. The Python scripts handle authentication automatically.
+- **NEVER** read, display, or modify `.env` or `server.key` — scripts handle auth autonomously
+- Always use the skill's venv Python directly: `.github/skills/upload-nested-data/scripts/.venv/bin/python`
+- Execute all steps **sequentially** — do not build a payload before confirming field accessibility
+- Always create a **new** timestamped payload file, never reuse old ones
+- Scripts return **structured JSON** (`status`, `data`, `error`) — always parse the response instead of relying on raw stdout
 
-**ALWAYS** when executig pip or python commands, make sure to pre-fix to activate the virtual environment in the same command Examples:
-- `source .venv/bin/activate && pip install ...`
-- `source .venv/bin/activate && python ...`
+---
 
-**Workflow**: Execute all steps sequentially in the same terminal session (use `isBackground: false` for all commands) to maintain the active virtual environment throughout.
+## Scripts
+
+All scripts live at `.github/skills/upload-nested-data/scripts/`.
+
+| File | Purpose |
+|---|---|
+| `setup.sh` | Creates venv and installs dependencies (idempotent) |
+| `describe_sobject.py` | Returns creatable fields for a given sObject (structured JSON) |
+| `insert_record.py` | Inserts a nested payload via Composite Tree API (structured JSON) |
 
 ---
 
 ## Workflow
-### Step 1 – Set up the virtual environment and install dependencies
 
-Execute the following commands:
-
+### Step 1 — Setup
 ```bash
-# Create virtual environment if not already present
-python3 -m venv .venv 
-
-# Activate virtual environment and install required packages
-source .venv/bin/activate && pip install -r .github/skills/upload-nested-data/scripts/requirements.txt
+bash .github/skills/upload-nested-data/scripts/setup.sh
 ```
 
+Idempotent — only installs dependencies when `requirements.txt` has changed.
+
+After running setup.sh, confirm the output contains `"status": "success"` 
+before proceeding. If status is "error", stop and report to the user.
+---
+
+### Step 2 — Introspect the data model (REQUIRED before Step 3)
+Do not build the payload until you have analyzed this output — field names and types from Step 2 determine what goes into the payload.
+
+Run for each sObject in the hierarchy and do not rely on stdout formatting — always parse the JSON response.
+
+```bash
+.github/skills/upload-nested-data/scripts/.venv/bin/python .github/skills/upload-nested-data/scripts/describe_sobject.py <sObject>
+```
+
+Output format
+The script returns structured JSON:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "FieldName": {
+      "type": "string",
+      "nillable": false
+    }
+  }
+}
+
+Only use fields from data where nillable and type match your intended payload.
+
+After running for all sObjects, confirm the output contains `"status": "success"` before proceeding. If status is "error", stop and report to the user.
 
 ---
 
-### Step 2 – Introspect the data model
+### Step 3 — Build the payload
 
-Describe each sObject that will appear in the hierarchy to learn which fields are creatable, their types, and whether they are nillable.
+Create `payload_<YYYYMMDD_HHMMSS>.json` following the Composite Tree format:
 
-```bash
-source .venv/bin/activate && python .github/skills/upload-nested-data/scripts/describe_sobject.py Account
-source .venv/bin/activate && python .github/skills/upload-nested-data/scripts/describe_sobject.py Contact
-source .venv/bin/activate && python .github/skills/upload-nested-data/scripts/describe_sobject.py Case
-```
-
-Analyze the JSON output to understand which fields are available and required before building your payload.
-
----
-
-### Step 3 – Build the payload
-
-Create a JSON file named `payload_<datetime>.json` (e.g. `payload_20260327_143022.json`) with the current date and time in `YYYYMMDD_HHMMSS` format.
-
-The file must follow the Composite Tree API format:
-
-Key rules:
 - Every record needs `attributes.type` (sObject API name) and a unique `attributes.referenceId`
-- Child records are nested under the relationship name (e.g. `Contacts`, `Cases`) as `{ "records": [...] }`
-- Only include fields confirmed as creatable in Step 2
-- Maximum 200 records and 5 nesting levels per request
-
-Example (`scripts/example_payload.json`):
-
+- Nest child records under their relationship name (e.g. `Contacts`, `Cases`) as `{ "records": [...] }`
+- Max 200 records, 5 nesting levels
 ```json
 {
   "records": [
     {
       "attributes": { "type": "Account", "referenceId": "ref1" },
       "Name": "Mustermann GmbH",
-      "Industry": "Technology",
       "Contacts": {
         "records": [
           {
             "attributes": { "type": "Contact", "referenceId": "ref2" },
             "LastName": "Mustermann",
-            "FirstName": "Erika",
-            "Email": "erika@mustermann.de",
             "Cases": {
               "records": [
                 {
                   "attributes": { "type": "Case", "referenceId": "ref3" },
-                  "Subject": "WLAN-Router funktioniert nicht",
+                  "Subject": "Issue",
                   "Status": "New",
                   "Origin": "Phone"
                 }
@@ -115,40 +124,37 @@ Example (`scripts/example_payload.json`):
 
 ---
 
-### Step 4 – Insert the record
-
-Pass the root sObject name and the timestamped payload file to the insert script.
-
-**Run in the same terminal** (with venv still active):
-
+### Step 4 — Insert
 ```bash
-source .venv/bin/activate && python .github/skills/upload-nested-data/scripts/insert_record.py Account <payload-json-file>
+.github/skills/upload-nested-data/scripts/.venv/bin/python .github/skills/upload-nested-data/scripts/insert_record.py <sObject> <payload-file>
 ```
 
-(Replace `<payload-json-file>` with the actual filename you created in Step 3.)
-
-A successful response:
+Output format
+The script returns structured JSON:
 
 ```json
 {
-  "hasErrors": false,
-  "results": [
-    { "referenceId": "ref1", "id": "001..." },
-    { "referenceId": "ref2", "id": "003..." }
-  ]
+  "status": "success",
+  "data": {
+    "hasErrors": false,
+    "results": [...]
+  }
 }
-```
 
-The script exits with a non-zero code if `hasErrors` is `true`.
+after running, confirm the output contains `"status": "success"` and `"hasErrors": false` before proceeding. If status is "error" or hasErrors is true, stop and report to the user.
+
+- "status": "success" → request succeeded
+- "status": "error" → request failed (see data or error field)
+
 
 ---
 
 ## Error reference
 
-| Salesforce error | Likely cause | Fix |
+| Error | Likely cause | Fix |
 |---|---|---|
-| `REQUIRED_FIELD_MISSING` | Non-nillable field omitted | Add the field (check Step 2 output) |
-| `INVALID_FIELD` | Field not createable or misspelled | Verify against `describe_sobject.py` output |
-| `INVALID_TYPE` | Wrong sObject name in `attributes.type` | sObject names are case-sensitive |
-| `DUPLICATE_VALUE` | `referenceId` used more than once | Ensure all `referenceId` values are unique |
-| `JWT auth failure` | `.env` credentials wrong or key mismatch | Ask User to update the `.env` file with correct credentials, never access the `.env` or `server.key` file directly |
+| `REQUIRED_FIELD_MISSING` | Non-nillable field omitted | Add field (check Step 2 output) |
+| `INVALID_FIELD` | Field not creatable or misspelled | Verify against `describe_sobject.py` |
+| `INVALID_TYPE` | Wrong sObject name | sObject names are case-sensitive |
+| `DUPLICATE_VALUE` | `referenceId` reused | Ensure all `referenceId` values are unique |
+| `JWT auth failure` | Invalid credentials | Ask user to update `.env` — never access it directly |

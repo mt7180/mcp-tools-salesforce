@@ -1,18 +1,12 @@
-"""
-Describe the creatable fields of a Salesforce sObject.
-
-Usage:
-    python scripts/describe_sobject.py <SObjectName>
-
-Credentials are read from a .env file (or environment) via pydantic-settings
-"""
-
 import json
-import sys
-
+import asyncio
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from simple_salesforce import Salesforce
+from pathlib import Path
 
+from sf_client import get_sf_client
+
+BASEDIR = Path(__file__).parent.parent
 
 class Settings(BaseSettings):
     CLIENT_ID: str
@@ -20,46 +14,64 @@ class Settings(BaseSettings):
     PRIVATE_KEY_FILE: str | None = None
     PRIVATE_KEY: str | None = None
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=BASEDIR / ".env", extra="ignore")
 
 
-def get_sf_client(settings: Settings) -> Salesforce:
-    private_key = settings.PRIVATE_KEY
-    if settings.PRIVATE_KEY_FILE:
-        with open(settings.PRIVATE_KEY_FILE) as f:
-            private_key = f.read()
-    if not private_key:
-        raise ValueError("Either PRIVATE_KEY_FILE or PRIVATE_KEY must be set.")
-    return Salesforce(
-        username=settings.USERNAME,
-        consumer_key=settings.CLIENT_ID,
-        privatekey=private_key,
-    )
-
-
-def main() -> None:
-    if len(sys.argv) < 2:
-        print("Usage: python describe_sobject.py <SObjectName>", file=sys.stderr)
-        sys.exit(1)
-
-    sobject_name = sys.argv[1]
+def describe_creatable_fields(sobject_name: str) -> dict:
     settings = Settings()
     sf = get_sf_client(settings)
 
-    description = sf.__getattr__(sobject_name).describe()
+    description = getattr(sf, sobject_name).describe()
 
     if not description.get("createable"):
-        print(json.dumps({}))
-        return
+        return {}
 
-    creatable_fields = {
-        field["name"]: {"type": field["type"], "nillable": field["nillable"]}
+    return {
+        field["name"]: {
+            "type": field["type"],
+            "nillable": field["nillable"],
+        }
         for field in description["fields"]
         if field["createable"]
     }
 
-    print(json.dumps(creatable_fields, indent=2))
+
+async def main(sobject: str) -> dict:
+    try:
+        return {
+            "status": "success",
+            "data": describe_creatable_fields(sobject),
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+        }
+
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    
+    # Check if argument is provided
+    if len(sys.argv) < 2:
+        error_result = {
+            "status": "error",
+            "error": "Missing required argument: sobject name"
+        }
+        print(json.dumps(error_result))
+        sys.stdout.flush()
+        sys.exit(1)
+    
+    # Run the main function
+    result = asyncio.run(main(sys.argv[1]))
+    
+    # Print result and flush output to ensure it's immediately available
+    print(json.dumps(result))
+    sys.stdout.flush()
+    
+    # Exit with appropriate code
+    if result.get("status") == "error":
+        sys.exit(1)
+    else:
+        sys.exit(0)

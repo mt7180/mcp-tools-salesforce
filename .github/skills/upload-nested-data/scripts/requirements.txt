@@ -1,2 +1,3 @@
 simple-salesforce 
 pydantic-settings
+asyncio

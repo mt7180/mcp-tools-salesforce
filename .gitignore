@@ -1,6 +1,9 @@
 .DS_Store
 notes.txt
 __pycache__/
+.sfdx/
+/.github/skills/upload-nested-data/scripts/.venv/
+/.github/skills/upload-nested-data/scripts/.installed
 
 *.key
 .env
