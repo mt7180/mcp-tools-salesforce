@@ -12,3 +12,23 @@ Converted this MCP tool into a SKILL.md agent skill for portability — no serve
 - More hacky & **dependency management requires discipline**: without `uv` and PEP 723 inline script metadata, the agent may install packages into system Python, polluting the host environment. With `uv run` and a `# /// script` block, this is largely solved — but it adds a hard dependency on `uv` being installed.
 - **Security risk**: the agent executes shell/Python directly on the host machine with no sandboxing layer
 - **Agent-dependent**: the skill relies on the LLM correctly interpreting markdown instructions rather than a strict tool schema — behavior may vary across agents or model versions
+
+## Getting Started
+- Follow this [steps](https://medium.com/@mira.theidel/how-to-connect-your-custom-mcp-server-to-salesforce-scratch-orgs-and-let-ai-generate-your-test-270ec91b41be#bd06) to set up the connection to your Salesforce org.
+- Add a custom `.env` file into the root skill folder and add your credentials:  
+
+```
+CLIENT_ID = 'xxx'
+CONSUMER_PW = 'xxx'
+USERNAME = 'xxx'
+PRIVATE_KEY_FILE = 'server.key'
+```
+
+&nbsp;&nbsp;  
+
+> &nbsp;  
+> Interesting discussion by the awesome **Pamela Fox**:  
+>
+> __"Can VS Code skills be a replacement for MCP servers?"__: 
+>- https://github.com/orgs/microsoft-foundry/discussions/280#discussioncomment-16338085
+>- https://youtu.be/Uufh7cPUnmQ?si=GuBGanruQCn0gDYT&t=885  
