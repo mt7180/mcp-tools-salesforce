@@ -2,6 +2,8 @@
 
 Converted this MCP tool into a SKILL.md agent skill for portability — no server, just a self-contained markdown file with executable scripts.
 
+>**Note on using pip install in the skill workflow**: The recommended approach for running Python scripts in an agent‑skill workflow is to use uv for virtual‑environment management. This setup is available in the parallel [branch](https://github.com/mt7180/mcp-tools-salesforce/tree/make-it-a-prompt-with-skill-and-use-uv). Once uv is installed and inline dependencies are added to the script, the agent no longer needs a setup.sh—it can simply execute the script via uv run <file-name>.py, no pip install needed.
+
 **Advantages**
 - No MCP server to run locally or deploy — just copy the folder into your project and you're done
 - Fully version-controlled alongside the codebase
