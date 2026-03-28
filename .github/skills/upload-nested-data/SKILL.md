@@ -22,16 +22,10 @@ Do **not** use this skill when:
 
 ---
 
-## Important
+## Security
 
 - **NEVER** read, display, or modify `.env` or `server.key` — scripts handle auth autonomously
-- Always use the skill's venv Python directly: `.github/skills/upload-nested-data/scripts/.venv/bin/python`
-- Execute all steps **sequentially** — do not build a payload before confirming field accessibility
-- Run python scripts from the `scripts` directory to ensure correct relative paths
-- Always create a **new** timestamped payload file, never reuse old ones
-- Scripts return **structured JSON** (`status`, `data`, `error`) — always parse the response instead of relying on raw stdout
-
----
+- Always parse the structured JSON response instead of relying on raw stdout
 
 ## Scripts
 
@@ -43,9 +37,8 @@ All scripts live at `.github/skills/upload-nested-data/scripts/`.
 | `describe_sobject.py` | Returns creatable fields for a given sObject (structured JSON) |
 | `insert_record.py` | Inserts a nested payload via Composite Tree API (structured JSON) |
 
----
-
-## Workflow
+## Pipeline
+Follow these steps **in order**. Do not build a payload before confirming field accessibility.
 
 ### Step 1 — Setup
 ```bash
@@ -68,8 +61,15 @@ Run for each sObject in the hierarchy and do not rely on stdout formatting — a
 .venv/bin/python describe_sobject.py <sObject>
 ```
 
-Output format
-The script returns structured JSON:
+#### Arguments
+
+| Argument | Required | Description |
+|---|---|---|
+| `sObject` | Yes | API name of the sObject (e.g. `Account`, `Contact`, `Case`). Case-sensitive. |
+
+
+#### Output
+Structured JSON printed to stdout:
 
 ```json
 {
@@ -83,19 +83,33 @@ The script returns structured JSON:
 }
 ```
 
-Only use fields from data where nillable and type match your intended payload.
+On failure:
 
-After running for all sObjects, confirm the output contains `"status": "success"` before proceeding. If status is "error", stop and report to the user.
+```json
+{
+  "status": "error",
+  "error": "error message"
+}
+```
+
+Parse the JSON response. Confirm `"status": "success"` before proceeding. If `"status": "error"`, stop and report to the user.
+
+Only use fields from `data` where `nillable` and `type` match your intended payload. Field names and types from this step determine what goes into the payload.
 
 ---
 
 ### Step 3 — Build the payload
 
-Create `payload_<YYYYMMDD_HHMMSS>.json` following the Composite Tree format:
+Create `payload_<YYYYMMDD_HHMMSS>.json` following the Composite Tree format. Always create a **new** timestamped payload file — never reuse old ones.
 
+Rules:
 - Every record needs `attributes.type` (sObject API name) and a unique `attributes.referenceId`
 - Nest child records under their relationship name (e.g. `Contacts`, `Cases`) as `{ "records": [...] }`
 - Max 200 records, 5 nesting levels
+- Only include fields confirmed as creatable in Step 1
+- For non-nillable fields, always provide a value
+
+Example:
 ```json
 {
   "records": [
@@ -132,24 +146,45 @@ Create `payload_<YYYYMMDD_HHMMSS>.json` following the Composite Tree format:
 .venv/bin/python insert_record.py <sObject> <payload-file>
 ```
 
-Output format
-The script returns structured JSON:
+#### Arguments
+
+| Argument | Required | Description |
+|---|---|---|
+| `root_sObject` | Yes | API name of the root sObject (e.g. `Account`). Case-sensitive. |
+| `payload_file` | Yes | Path to JSON file following Composite Tree format. |
+
+#### Output
+Structured JSON printed to stdout:
 
 ```json
 {
   "status": "success",
   "data": {
     "hasErrors": false,
-    "results": [...]
+    "results": [
+      { "referenceId": "ref1", "id": "001..." },
+      { "referenceId": "ref2", "id": "003..." }
+    ]
   }
 }
 ```
 
-after running, confirm the output contains `"status": "success"` and `"hasErrors": false` before proceeding. If status is "error" or hasErrors is true, stop and report to the user.
+On failure:
 
-- "status": "success" → request succeeded
-- "status": "error" → request failed (see data or error field)
+```json
+{
+  "status": "error",
+  "error": "error message"
+}
+```
 
+Parse the JSON response. Confirm `"status": "success"` **and** `"hasErrors": false` before proceeding. If status is `"error"` or `hasErrors` is `true`, consult the error reference below and report to the user.
+
+---
+
+### Step 5 — Verify and report
+
+Confirm results to the user. Summarize the created records with their IDs and reference IDs.
 
 ---
 

@@ -16,7 +16,7 @@ Converted this MCP tool into a SKILL.md agent skill for portability — no serve
 ## Getting Started
 For OAuth 2.0 JWT Bearer Flow:
 - Follow this [steps](https://medium.com/@mira.theidel/how-to-connect-your-custom-mcp-server-to-salesforce-scratch-orgs-and-let-ai-generate-your-test-270ec91b41be#bd06) to set up the connection to your Salesforce org.
-- Add a custom `.env` file into the root skill folder and add your credentials:  
+- Place your `server.key` and a custom `.env` file in the root project folder and add your credentials:  
 
 ```
 CLIENT_ID = 'xxx'
