@@ -8,15 +8,15 @@ Converted this MCP tool into composable Copilot **skills** and an orchestrating 
 .github/
 ├── prompts/
 │   └── upload-nested-data.prompt.md   ← orchestration workflow
-└── skills/
-	├── describe-sobject/              ← atomic skill: introspect sObject fields
-	│   ├── SKILL.md
-	│   └── describe_sobject.py
-	├── insert-record/                 ← atomic skill: insert nested records
-	│   ├── SKILL.md
-	│   └── insert_record.py
-	└── upload-nested-data/
-		└── .env                       ← Salesforce JWT credentials
+├── skills/
+│	├── describe-sobject/              ← atomic skill: introspect sObject fields
+│	│   ├── SKILL.md
+│	│   └── describe_sobject.py
+│	└── insert-record/                 ← atomic skill: insert nested records
+│	    ├── SKILL.md
+│	    └── insert_record.py
+├── .env
+└── server.key
 ```
 
 - **Prompt** orchestrates multi-step workflows, referencing skills
