@@ -11,6 +11,11 @@ argument-hint: <sObject>
 
 Returns all creatable fields for a given Salesforce sObject as structured JSON. Used to validate field names and types before building a Composite Tree payload.
 
+## Security
+
+- **NEVER** read, display, or modify `.env` or `server.key` — scripts handle auth autonomously
+- Always parse the structured JSON response instead of relying on raw stdout
+
 ## Invocation
 
 ```bash

@@ -2,8 +2,7 @@
 agent: 'agent'
 description: >-
   Insert a nested Salesforce record hierarchy into a scratch org.
-  Orchestrates: introspecting the data model, building the payload, and inserting records
-  via the Composite Tree REST API.
+  Orchestrates: introspecting the data model, building the payload, and inserting records via the Composite Tree REST API.
 ---
 
 # Upload Nested Record to Salesforce Scratch Org
@@ -27,23 +26,13 @@ Do **not** use when:
 - **NEVER** read, display, or modify `.env` or `server.key` — scripts handle auth autonomously
 - Always parse the structured JSON response instead of relying on raw stdout
 
-## Configuration
-
-Credentials file: `.github/skills/upload-nested-data/.env`
-
-All scripts require `--env-file .github/skills/upload-nested-data/.env`.
-
 ## Pipeline
 
 Follow these steps **in order**. Do not build a payload before confirming field accessibility.
 
 ### Step 1 — Introspect the data model
 
-Run for **each sObject** in the hierarchy:
-
-```bash
-uv run .github/skills/describe-sobject/describe_sobject.py <sObject> --env-file .github/skills/upload-nested-data/.env
-```
+Use the `describe-sobject` tool to inspect the fields of any needed sObject.
 
 Parse the JSON response. Confirm `"status": "success"` before proceeding. If `"status": "error"`, stop and report to the user.
 
@@ -92,9 +81,7 @@ Example:
 
 ### Step 3 — Insert
 
-```bash
-uv run .github/skills/insert-record/insert_record.py <root_sObject> <payload_file> --env-file .github/skills/upload-nested-data/.env
-```
+Use the `insert-record` tool to insert the payload into the scratch org.
 
 Parse the JSON response. Confirm `"status": "success"` **and** `"hasErrors": false` before proceeding. If status is `"error"` or `hasErrors` is `true`, consult the error reference below and report to the user.
 

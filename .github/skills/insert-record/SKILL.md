@@ -12,6 +12,11 @@ argument-hint: <root_sObject> <payload_file>
 
 Inserts a nested payload into a Salesforce scratch org via the Composite Tree REST API. Takes a JSON file following the Composite Tree format and a root sObject name.
 
+## Security
+
+- **NEVER** read, display, or modify `.env` or `server.key` — scripts handle auth autonomously
+- Always parse the structured JSON response instead of relying on raw stdout
+
 ## Invocation
 
 ```bash
