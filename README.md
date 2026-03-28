@@ -7,7 +7,7 @@ A custom MCP server built with FastMCP that connects to a Salesforce scratch org
 
 ![notes](notes.excalidraw.png)
 
-## Tools
+### Tools
 
 | Tool | Description |
 |---|---|
@@ -20,6 +20,18 @@ A custom MCP server built with FastMCP that connects to a Salesforce scratch org
 &nbsp;&nbsp;
 
 > **Note:** `generate_nested_record` uses MCP Sampling with tools + structured output. Authentication via JWT Bearer Flow.
+
+### Getting Started
+- Follow the [steps](https://medium.com/@mira.theidel/how-to-connect-your-custom-mcp-server-to-salesforce-scratch-orgs-and-let-ai-generate-your-test-270ec91b41be#bd06) to set up the connection to your Salesforce org.
+- Add a custom `.env` file into the root project folder and add your credentials:  
+
+```
+CLIENT_ID = 'xxx'
+CONSUMER_PW = 'xxx'
+USERNAME = 'xxx'
+PRIVATE_KEY_FILE = 'server.key'
+OPENAI_API_KEY = 'xxx'
+```
 
 ## Resources
 - https://help.salesforce.com/s/articleView?id=xcloud.jwt_connectedapp_enable.htm&type=5
