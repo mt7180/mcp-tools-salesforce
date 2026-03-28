@@ -14,6 +14,7 @@ Converted this MCP tool into a SKILL.md agent skill for portability — no serve
 - **Agent-dependent**: the skill relies on the LLM correctly interpreting markdown instructions rather than a strict tool schema — behavior may vary across agents or model versions
 
 ## Getting Started
+For OAuth 2.0 JWT Bearer Flow:
 - Follow this [steps](https://medium.com/@mira.theidel/how-to-connect-your-custom-mcp-server-to-salesforce-scratch-orgs-and-let-ai-generate-your-test-270ec91b41be#bd06) to set up the connection to your Salesforce org.
 - Add a custom `.env` file into the root skill folder and add your credentials:  
 
@@ -23,6 +24,7 @@ CONSUMER_PW = 'xxx'
 USERNAME = 'xxx'
 PRIVATE_KEY_FILE = 'server.key'
 ```
+**OR**: Less secure, but you could also consider getting the access token for your Salesforce Org from sf cli and let the agent inject it as input for the python scrips (in this case you won't need the sf_client and .env file anymore)
 
 &nbsp;&nbsp;  
 
