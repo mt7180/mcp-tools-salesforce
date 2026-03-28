@@ -25,3 +25,13 @@ A custom MCP server built with FastMCP that connects to a Salesforce scratch org
 - https://help.salesforce.com/s/articleView?id=xcloud.jwt_connectedapp_enable.htm&type=5
 - https://generect.com/blog/salesforce-mcp-integration/
 - https://www.jlowin.dev/blog/the-inverted-agent
+
+&nbsp;&nbsp;  
+
+> &nbsp;  
+> Interesting discussion by awesome **Pamela Fox**:  
+>
+> __"Can VS Code skills be a replacement for MCP servers?"__: 
+>- https://github.com/orgs/microsoft-foundry/discussions/280#discussioncomment-16338085
+>- https://youtu.be/Uufh7cPUnmQ?si=GuBGanruQCn0gDYT&t=885  
+
